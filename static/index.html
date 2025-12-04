@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Chat & FTP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --sidebar-bg: #1e293b;
+            --chat-bg: #0f172a;
+            --input-bg: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --msg-sent: #3b82f6;
+            --msg-received: #1e293b;
+            --border-color: #334155;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-primary); height: 100vh; display: flex; overflow: hidden; }
+
+        /* Login Screen */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); z-index: 100; display: flex;
+            align-items: center; justify-content: center; flex-direction: column;
+        }
+        .login-box {
+            background: var(--sidebar-bg); padding: 2rem; border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); width: 100%; max-width: 400px;
+            text-align: center;
+        }
+        .login-box h1 { margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 600; }
+        .login-box input {
+            width: 100%; padding: 0.75rem; margin-bottom: 1rem; border-radius: 0.5rem;
+            border: 1px solid var(--border-color); background: var(--input-bg);
+            color: var(--text-primary); outline: none; transition: border-color 0.2s;
+        }
+        .login-box input:focus { border-color: var(--accent-color); }
+        .btn {
+            width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: none;
+            background: var(--accent-color); color: white; font-weight: 500;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn:hover { background: var(--accent-hover); }
+
+        /* Main Layout */
+        #app { display: flex; width: 100%; height: 100%; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        #app.active { opacity: 1; pointer-events: all; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px; background: var(--sidebar-bg); border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; padding: 1.5rem;
+        }
+        .sidebar-header { margin-bottom: 2rem; }
+        .sidebar-header h2 { font-size: 1.25rem; font-weight: 600; color: var(--text-primary); }
+        .sidebar-header .status { font-size: 0.875rem; color: var(--success); display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+        .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
+
+        .users-list { flex: 1; overflow-y: auto; margin-bottom: 1rem; }
+        .users-list h3 { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em; margin-bottom: 1rem; }
+        
+        .files-list { flex: 1; overflow-y: auto; border-top: 1px solid var(--border-color); padding-top: 1rem; }
+        .files-list h3 { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em; margin-bottom: 1rem; display:flex; justify-content:space-between; align-items:center; }
+        .file-item {
+            display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;
+            border-radius: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;
+        }
+        .file-item:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        .file-icon { color: var(--accent-color); }
+
+        .user-item {
+            display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem;
+            border-radius: 0.5rem; cursor: pointer; transition: background 0.2s;
+            color: var(--text-secondary);
+        }
+        .user-item:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        .user-item.active { background: rgba(59, 130, 246, 0.1); color: var(--accent-color); }
+        .user-avatar {
+            width: 32px; height: 32px; background: var(--input-bg); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-weight: 600;
+            color: var(--text-primary); font-size: 0.875rem;
+        }
+        .dm-btn {
+            background: transparent; border: none; color: var(--text-secondary);
+            cursor: pointer; padding: 4px; border-radius: 4px; display: flex;
+            align-items: center; justify-content: center; transition: color 0.2s, background 0.2s;
+        }
+        .dm-btn:hover { color: var(--accent-color); background: rgba(255,255,255,0.1); }
+
+        .ftp-info {
+            margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color);
+            font-size: 0.75rem; color: var(--text-secondary);
+        }
+        .ftp-info code {
+            display: block; background: rgba(0,0,0,0.2); padding: 0.5rem;
+            border-radius: 0.25rem; margin-top: 0.5rem; font-family: monospace; color: var(--accent-color);
+        }
+
+        /* Chat Area */
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); }
+        .chat-header {
+            padding: 1.5rem; border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .chat-header h3 { font-size: 1.1rem; font-weight: 600; }
+        
+        .header-actions { display: flex; gap: 1rem; }
+        .primary-btn {
+            background: var(--accent-color); color: white; border: none; padding: 0.5rem 1rem;
+            border-radius: 0.5rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+        }
+        .primary-btn:hover { background: var(--accent-hover); }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;
+        }
+        
+        .message { max-width: 70%; display: flex; flex-direction: column; gap: 0.25rem; }
+        .message.sent { align-self: flex-end; align-items: flex-end; }
+        .message.received { align-self: flex-start; align-items: flex-start; }
+        
+        .msg-bubble {
+            padding: 0.75rem 1rem; border-radius: 1rem; font-size: 0.95rem; line-height: 1.5;
+            position: relative; word-wrap: break-word;
+        }
+        .message.sent .msg-bubble {
+            background: var(--msg-sent); color: white; border-bottom-right-radius: 0.25rem;
+        }
+        .message.received .msg-bubble {
+            background: var(--msg-received); color: var(--text-primary); border-bottom-left-radius: 0.25rem;
+        }
+        .msg-info { font-size: 0.75rem; color: var(--text-secondary); margin: 0 0.25rem; }
+        
+        .system-msg {
+            align-self: center; background: rgba(255,255,255,0.05); padding: 0.25rem 0.75rem;
+            border-radius: 1rem; font-size: 0.75rem; color: var(--text-secondary); margin: 0.5rem 0;
+        }
+
+        .chat-input-area {
+            padding: 1.5rem; border-top: 1px solid var(--border-color);
+            display: flex; gap: 1rem;
+        }
+        .chat-input-area input {
+            flex: 1; padding: 0.75rem 1rem; border-radius: 1.5rem; border: 1px solid var(--border-color);
+            background: var(--input-bg); color: var(--text-primary); outline: none;
+        }
+        .chat-input-area input:focus { border-color: var(--accent-color); }
+        .send-btn {
+            width: 48px; height: 48px; border-radius: 50%; border: none;
+            background: var(--accent-color); color: white; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s;
+        }
+        .send-btn:active { transform: scale(0.95); }
+        
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--sidebar-bg); padding: 2rem; border-radius: 1rem; width: 400px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 1.5rem; }
+        .modal-header h3 { font-weight: 600; }
+        .close-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem; }
+        .user-select-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>Secure Chat</h1>
+            <input type="text" id="username-input" placeholder="Enter username..." autocomplete="off">
+            <button class="btn" onclick="connect()">Join Chat</button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Secure Chat</h2>
+                <div class="status"><span class="status-dot"></span> Online</div>
+            </div>
+            
+            <div class="users-list">
+                <h3>Online Users</h3>
+                <div id="users-container">
+                    <!-- Users will be injected here -->
+                </div>
+            </div>
+
+            <div class="files-list">
+                <h3>
+                    Shared Files 
+                    <div style="display:flex; gap:5px">
+                        <button onclick="document.getElementById('file-upload').click()" style="background:none; border:none; color:var(--accent-color); cursor:pointer; font-size:0.9rem" title="Upload File">⬆</button>
+                        <button onclick="refreshFiles()" style="background:none; border:none; color:var(--accent-color); cursor:pointer; font-size:0.9rem" title="Refresh">↻</button>
+                    </div>
+                </h3>
+                <input type="file" id="file-upload" style="display:none" onchange="uploadFile(this)">
+                <div id="files-container">
+                    <!-- Files injected here -->
+                </div>
+            </div>
+
+
+        </aside>
+
+        <main class="chat-area">
+            <div class="chat-header">
+                <h3 id="chat-title">Broadcast Channel</h3>
+            </div>
+            
+            <div id="messages" class="chat-messages">
+                <div class="system-msg">Welcome to Secure Chat. Messages are encrypted in transit.</div>
+            </div>
+
+            <div class="chat-input-area">
+                <input type="text" id="message-input" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+                <button class="send-btn" onclick="sendMessage()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let ws;
+        let currentUser = '';
+        let activeChat = 'broadcast'; // 'broadcast' or username
+        let chats = {
+            'broadcast': { name: 'Broadcast Channel', messages: [], unread: 0 }
+        };
+        let allUsers = [];
+
+        const loginScreen = document.getElementById('login-screen');
+        const app = document.getElementById('app');
+        const usersContainer = document.getElementById('users-container');
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+        const chatTitle = document.getElementById('chat-title');
+        const filesContainer = document.getElementById('files-container');
+
+        function connect() {
+            const username = document.getElementById('username-input').value.trim();
+            if (!username) return;
+            
+            currentUser = username;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws?username=${encodeURIComponent(username)}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                loginScreen.style.display = 'none';
+                app.classList.add('active');
+                renderChat();
+                refreshFiles();
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onclose = () => {
+                alert('Disconnected from server');
+                location.reload();
+            };
+        }
+
+        async function refreshFiles() {
+            try {
+                const res = await fetch('/files');
+                const data = await res.json();
+                updateFiles(data.files || []);
+            } catch (e) {
+                console.error("Failed to fetch files", e);
+            }
+        }
+
+        async function uploadFile(input) {
+            if (input.files && input.files[0]) {
+                const formData = new FormData();
+                formData.append('file', input.files[0]);
+                formData.append('username', currentUser);
+                
+                try {
+                    const res = await fetch('/upload', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (!data.error) refreshFiles();
+                    else alert('Upload failed: ' + data.error);
+                } catch (e) {
+                    alert('Upload error: ' + e);
+                }
+                input.value = '';
+            }
+        }
+
+        function updateFiles(files) {
+            filesContainer.innerHTML = '';
+            if (files.length === 0) {
+                filesContainer.innerHTML = '<div style="padding:0.5rem; font-size:0.8rem; color:var(--text-secondary)">No files shared yet.</div>';
+                return;
+            }
+            files.forEach(file => {
+                const fileName = file.name || file; // Handle both old (string) and new (obj) format temporarily if needed
+                const owner = file.owner || 'Unknown';
+                
+                const el = document.createElement('div');
+                el.className = 'file-item';
+                
+                let deleteBtn = '';
+                if (owner === currentUser) {
+                    deleteBtn = `<button onclick="deleteFile('${fileName}')" style="background:none; border:none; color:var(--error); cursor:pointer; margin-left:5px" title="Delete">🗑</button>`;
+                }
+                
+                el.innerHTML = `
+                    <span class="file-icon">📄</span>
+                    <div style="flex:1; overflow:hidden;">
+                        <div style="text-overflow:ellipsis; overflow:hidden; white-space:nowrap">${fileName}</div>
+                        <div style="font-size:0.7rem; color:var(--text-secondary)">by ${owner}</div>
+                    </div>
+                    <a href="/files_proxy/${fileName}" download="${fileName}" style="color:var(--accent-color); text-decoration:none" title="Download">⬇</a>
+                    ${deleteBtn}
+                `;
+                filesContainer.appendChild(el);
+            });
+        }
+
+        async function deleteFile(filename) {
+            if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
+            
+            try {
+                const res = await fetch(`/delete/${filename}?username=${encodeURIComponent(currentUser)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    refreshFiles();
+                } else {
+                    const data = await res.json();
+                    alert('Delete failed: ' + (data.detail || data.error));
+                }
+            } catch (e) {
+                alert('Delete error: ' + e);
+            }
+        }
+        
+        // Helper to download via FTP link or just alert for now since we don't have HTTP proxy for files yet
+        // Wait, I can serve the files directory via FastAPI StaticFiles!
+        // I will assume I can add that to server.py or just use the FTP link.
+        // For now, let's use the FTP link as requested "FTP within the app" usually implies using the FTP protocol, 
+        // but browsers don't support FTP download well anymore.
+        // Best approach: Provide an HTTP download link (via a new static mount) AND show the FTP link.
+        function downloadFile(e, filename) {
+            e.preventDefault();
+            // Try to open FTP link
+            window.location.href = `ftp://127.0.0.1:2121/${filename}`;
+        }
+
+        function handleMessage(data) {
+            if (data.type === 'users' || data.type === 'info') {
+                if (data.users) updateUsers(data.users);
+            }
+            
+            if (data.type === 'message') {
+                const isDirect = data.is_direct;
+                const sender = data.from;
+                const isMe = sender === currentUser;
+                
+                // Determine which chat this belongs to
+                let targetChat = 'broadcast';
+                if (isDirect) {
+                    // If I sent it, it belongs to the chat with the receiver (which I don't know from payload! Wait.)
+                    // If I received it, it belongs to the chat with the sender.
+                    // PROBLEM: When I send a DM, the server echoes it back to the receiver, but NOT to me?
+                    // The server code: await send_to_user(to, ...). It does NOT echo to sender.
+                    // So 'data' here is always INCOMING message from someone else (or broadcast).
+                    // My own sent messages are handled in sendMessage().
+                    targetChat = sender;
+                }
+
+                if (!chats[targetChat]) {
+                    chats[targetChat] = { name: targetChat, messages: [], unread: 0 };
+                }
+
+                chats[targetChat].messages.push({
+                    sender: sender,
+                    text: data.message,
+                    isSent: false,
+                    time: new Date()
+                });
+
+                if (activeChat !== targetChat) {
+                    chats[targetChat].unread++;
+                    updateUsers(allUsers); // Refresh UI to show unread badge
+                } else {
+                    renderChat();
+                }
+            }
+        }
+
+        function updateUsers(users) {
+            allUsers = users;
+            usersContainer.innerHTML = '';
+            
+            // Broadcast Item
+            const broadcastEl = document.createElement('div');
+            broadcastEl.className = `user-item ${activeChat === 'broadcast' ? 'active' : ''}`;
+            broadcastEl.innerHTML = `
+                <div class="user-avatar" style="background: var(--accent-color)">B</div>
+                <div style="flex:1">Broadcast</div>
+                ${chats['broadcast'].unread > 0 ? `<span style="background:red; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem">${chats['broadcast'].unread}</span>` : ''}
+            `;
+            broadcastEl.onclick = () => switchChat('broadcast');
+            usersContainer.appendChild(broadcastEl);
+
+            // User Items
+            users.forEach(user => {
+                if (user === currentUser) return;
+                
+                const unread = chats[user] ? chats[user].unread : 0;
+                const el = document.createElement('div');
+                el.className = `user-item ${activeChat === user ? 'active' : ''}`;
+                el.innerHTML = `
+                    <div class="user-avatar">${user[0].toUpperCase()}</div>
+                    <div style="flex:1">${user}</div>
+                    ${unread > 0 ? `<span style="background:red; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem">${unread}</span>` : ''}
+                `;
+                el.onclick = () => switchChat(user);
+                usersContainer.appendChild(el);
+            });
+        }
+
+        function openDMModal() {
+            modalUserList.innerHTML = '';
+            const users = allUsers.filter(u => u !== currentUser);
+            
+            if (users.length === 0) {
+                modalUserList.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-secondary)">No other users online.</div>';
+            } else {
+                users.forEach(user => {
+                    const el = document.createElement('div');
+                    el.className = 'user-item';
+                    el.innerHTML = `
+                        <div class="user-avatar">${user[0].toUpperCase()}</div>
+                        <span>${user}</span>
+                    `;
+                    el.onclick = () => {
+                        switchChat(user);
+                        closeModal();
+                    };
+                    modalUserList.appendChild(el);
+                });
+            }
+            dmModal.classList.add('active');
+        }
+
+        function closeModal() {
+            dmModal.classList.remove('active');
+        }
+
+        function switchChat(chatId) {
+            activeChat = chatId;
+            if (!chats[chatId]) {
+                chats[chatId] = { name: chatId, messages: [], unread: 0 };
+            }
+            chats[chatId].unread = 0;
+            updateUsers(allUsers);
+            renderChat();
+        }
+
+        function renderChat() {
+            const chat = chats[activeChat];
+            chatTitle.textContent = activeChat === 'broadcast' ? 'Broadcast Channel' : `Chat with ${activeChat}`;
+            messagesContainer.innerHTML = '';
+            
+            if (activeChat === 'broadcast') {
+                messagesContainer.innerHTML = '<div class="system-msg">Welcome to Secure Chat. Messages are encrypted in transit.</div>';
+            }
+
+            chat.messages.forEach(msg => {
+                const div = document.createElement('div');
+                div.className = `message ${msg.isSent ? 'sent' : 'received'}`;
+                const time = msg.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                div.innerHTML = `
+                    <div class="msg-info">${msg.isSent ? 'You' : msg.sender} • ${time}</div>
+                    <div class="msg-bubble">${escapeHtml(msg.text)}</div>
+                `;
+                messagesContainer.appendChild(div);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text || !ws) return;
+
+            if (activeChat === 'broadcast') {
+                ws.send(JSON.stringify({ type: 'broadcast', message: text }));
+                // Broadcasts come back via websocket, so we don't add them manually here
+                // Wait, server logic:
+                // await broadcast(...) -> sends to ALL, including sender.
+                // So we should NOT add it manually.
+            } else {
+                // Direct Message
+                ws.send(JSON.stringify({ type: 'direct', to: activeChat, message: text }));
+                // DMs are NOT echoed back by server to sender. We MUST add manually.
+                chats[activeChat].messages.push({
+                    sender: currentUser,
+                    text: text,
+                    isSent: true,
+                    time: new Date()
+                });
+                renderChat();
+            }
+            messageInput.value = '';
+        }
+
+        function addMessage(sender, text, isSent, isDirect) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const directTag = isDirect ? '<span style="color: #f59e0b; font-weight:bold; margin-right:4px">[Private]</span>' : '';
+            
+            msgDiv.innerHTML = `
+                <div class="msg-info">${isSent ? 'You' : sender} • ${time}</div>
+                <div class="msg-bubble" style="${isDirect ? 'border: 1px solid #f59e0b;' : ''}">${directTag}${escapeHtml(text)}</div>
+            `;
+            
+            messagesContainer.appendChild(msgDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'system-msg';
+            div.textContent = text;
+            messagesContainer.appendChild(div);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
